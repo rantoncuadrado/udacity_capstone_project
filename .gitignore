@@ -8,6 +8,7 @@ old_versions/
 input_files/
 # Ignore where AWS codes are
 dl.cfg
+*.cfg
 # Ignore notebook example
 BACKEND*.ipynb
 
