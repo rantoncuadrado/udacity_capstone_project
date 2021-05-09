@@ -5,7 +5,6 @@ Support module
 
 import os
 import configparser
-
 import boto
 import botocore
 import boto3
@@ -22,7 +21,6 @@ def copy_files_s3_to_local(bucket_name, local_path):
 	Parameters:
 	bucket_name: s3 bucket name where the files are
 	local_path: local path to store the files 
-	file_names list: a list with the filenames
 	"""
 
 	config=configparser.ConfigParser()
@@ -55,15 +53,15 @@ def copy_files_s3_to_local(bucket_name, local_path):
 
 	print("List of bucket objects",files)
 
-# This would clone a file in a s3 bucket
-# s3_resource.Object('raul-udacity','bares2.csv').copy_from(CopySource='raul-udacity/bares.csv')
-# And this would read it df=spark.read.json("s3a://udacity-dend/log_json_path.json")
+	# This would clone a file in a s3 bucket
+	# s3_resource.Object('raul-udacity','bares2.csv').copy_from(CopySource='raul-udacity/bares.csv')
+	# And this would read it df=spark.read.json("s3a://udacity-dend/log_json_path.json")
 
 	for file in files:
 		try:
- 			s3_resource.Bucket(bucket_name).download_file(file, local_path+file)
- 		except botocore.exceptions.ClientError as e:
- 			if e.response['Error']['Code'] == "404":
- 				print("I cannot find object ", file)
- 			else:
- 				raise
+			s3_resource.Bucket(bucket_name).download_file(file, local_path+file)
+		except botocore.exceptions.ClientError as e:
+			if e.response['Error']['Code'] == "404":
+				print("I cannot find object ", file)
+			else:
+				raise
