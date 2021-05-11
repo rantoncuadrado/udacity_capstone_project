@@ -5,7 +5,7 @@ Support module
 
 
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import udf, col, count, lit, when, max
+from pyspark.sql.functions import udf, col, count, lit, when, max, lower
 
 def create_postal_code(sparkdf_garitos):
 
@@ -52,7 +52,8 @@ def create_social(spark_session, location_path, asociationfilename, sportclubsfi
 	sportclubsfilename filename containing sport clubs
 
 	NOTE We cannot use an array with filenames as with garitos BECAUSE column names
-	are not consistent among files (Asociación and Name / C_Postal and C.Postal) 
+	are not consistent among files (Asociación and Name / C_Postal and C.Postal)
+	we are also going to use 'Deportes' column from one of them. 
 
 	Returns:
 	sparkdf_social: the sparkdataframe with all the garitos
@@ -74,16 +75,18 @@ def create_social(spark_session, location_path, asociationfilename, sportclubsfi
 	sparkdf_social = Sparkdf_association.select(
 			col('Asociación').alias('name'),
 			col('Domicilio').alias('address'),
-			col('Provincia').alias('county'),
+			lower(col('Provincia')).alias('county'),
 			col('Municipio').alias('city'),
 			col('`C_Postal`').alias('postal_code')
-			).withColumn("social_kind",lit('association')).distinct()\
+			).withColumn("sports",lit('N/A'))\
+			.withColumn("social_kind",lit('association')).distinct()\
 		.union(Sparkdf_sport_clubs.select(
 			col('Nombre').alias('name'),
 			col('Domicilio').alias('address'),
-			col('Provincia').alias('county'),
+			lower(col('Provincia')).alias('county'),
 			col('Localidad').alias('city'),
-			col('`C.Postal`').alias('postal_code')
+			col('`C.Postal`').alias('postal_code'),
+			col('Deportes').alias('sports')
 			).withColumn("social_kind",lit('sports_club')).distinct())
 
 	#We finally apply union to all the sparkDf handles
@@ -126,7 +129,7 @@ def create_garitos(spark_session, location_path, filenames):
 		sparkdf_handle=sparkdf_handle.select(
 			col('Nombre').alias('name'),
 			col('Dirección').alias('address'),
-			col('Provincia').alias('county'),
+			lower(col('Provincia')).alias('county'),
 			col('Municipio').alias('city'),
 			col('`C.Postal`').alias('postal_code')
 			).withColumn("garito_kind",lit(filename[:filename.find('.')])).distinct()
@@ -146,7 +149,7 @@ def create_garitos(spark_session, location_path, filenames):
 
 	return sparkdf_garitos
 
-def toparquet_by_county_and_postcode(spark_session, parquet_location_path, sparkdf_garitos):
+def toparquet_by_county_and_postcode(spark_session, parquet_location_path, sparkdf):
 
 	"""
 	Creates a parquet file with postal_codes
@@ -154,7 +157,7 @@ def toparquet_by_county_and_postcode(spark_session, parquet_location_path, spark
 	Parameters:
 	spark_session: the session we'll use (It could be local or to read from s3)
 	parquet_location_path: The complete path where to copy the parquet file (It could be 's3a/bucket/' or a local path) 
-	sparkdf_garitos: the sparkdataframe with the garitos
+	sparkdf: the input sparkdataframe for the parquet table
 
 	"""
-	sparkdf_garitos.write.partitionBy("county","postal_code").parquet(parquet_location_path, mode="overwrite")
+	sparkdf.write.partitionBy("county","postal_code").parquet(parquet_location_path, mode="overwrite")
