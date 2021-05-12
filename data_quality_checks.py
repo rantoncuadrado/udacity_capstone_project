@@ -5,7 +5,7 @@ Support module
 
 
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import udf, col, count, lit, when, max, regexp_replace
+from pyspark.sql.functions import udf, col, count, lit, when, max, regexp_replace, lower
 
 def check_sparkdf_not_nulls(sparkdf,columns):
 
@@ -63,7 +63,7 @@ def clean_wrong_counties(sparkdf):
 	counties=['burgos','ávila','león','segovia','palencia','zamora','soria','salamanca','valladolid']
 
 	# First we replace common errors (avila -> ávila, leon -> león)
-	sparkdf=sparkdf.withColumn('county', regexp_replace('county', 'avila', 'ávila')).withColumn('county', regexp_replace('county', 'leon', 'león'))
+	sparkdf=sparkdf.withColumn('county',lower(col('county'))).withColumn('county', regexp_replace('county', 'avila', 'ávila')).withColumn('county', regexp_replace('county', 'leon', 'león'))
 
 	return sparkdf.filter(col('county').isin(counties) == True)
 
