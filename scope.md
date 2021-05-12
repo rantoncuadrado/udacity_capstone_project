@@ -15,3 +15,11 @@ Scope.md file
 Describe the data sets you're using. Where did it come from? What type of information is included? 
 https://github.com/rantoncuadrado/udacity_capstone_project/blob/main/Datasources%20Description.md
 Datasources Description.md file
+
+# Step 2: Explore and Assess the Data
+
+## Explore the Data
+
+## Identify data quality issues, like missing values, duplicate data, etc.
+
+## Cleaning Steps
