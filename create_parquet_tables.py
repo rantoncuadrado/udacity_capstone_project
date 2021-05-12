@@ -5,7 +5,8 @@ Support module
 
 
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import udf, col, count, lit, when, max, lower
+from pyspark.sql.functions import udf, col, count, lit, when, max, lower, explode, explode_outer,coalesce, monotonically_increasing_id, collect_set
+
 
 def create_postal_code(sparkdf_garitos):
 
@@ -161,3 +162,69 @@ def toparquet_by_county_and_postcode(spark_session, parquet_location_path, spark
 
 	"""
 	sparkdf.write.partitionBy("county","postal_code").parquet(parquet_location_path, mode="overwrite")
+
+
+def create_cultural_from_json(spark_session, location_path, filenames):
+
+	"""
+	Reads the list of different cultural institution filenames a
+	
+	By default we have 2 filenames containing libraries and museums, but some other 
+	institution type (and consequently files) could be added. 
+	
+	Parameters:
+	spark_session: the session we'll use (It could be local or to read from s3)
+	location_path: The path where the files are (It could be 's3a://bucket/' or a local path) 
+	file_names list: a list with the filenames
+
+	Returns:
+	sparkdf_cultural: the sparkdataframe with all the garitos
+	"""
+
+	sparkdf_list=[]
+
+	for filename in filenames:
+
+		sparkdf_handle = spark_session.read.options(multiLine=True).json(location_path+filename)
+
+		# THE JSON FILE STRUCTURE IS COMPLEX TO THE MAX!!!
+		# Dividing the process in several steps to make it easier to follow
+
+		exp_df = sparkdf_handle.select('document.list.element.attribute')
+		exp_df2 = exp_df.select(monotonically_increasing_id().alias('library_id'), explode_outer('attribute').alias('next_evolution'))
+		exp_df3 = exp_df2.select(col('library_id'),explode('next_evolution').alias('next_evolution'))
+
+		# THese are the fields that we'll use
+		fields=['Identificador','NombreOrganismo','Calle','CodigoPostal','Localidad_NombreLocalidad','Directorio Superior']
+
+		exp_df4=exp_df3.select(
+			col('library_id'),
+			col('next_evolution.name').alias('name'), 
+			coalesce(col('next_evolution.valor'),
+					col('next_evolution.LocalidadPadre'),
+					col('next_evolution.string'),
+					col('next_evolution.text')).alias('value'), 
+			).filter(col('name').isin(fields) == True)
+
+
+		exp_df5=exp_df4.select('*').groupBy("library_id").pivot('name').agg(collect_set('value')[0])
+
+		exp_df6=exp_df5.select(
+			col('NombreOrganismo').alias('name'),
+			col('Calle').alias('address'),
+			col('Directorio Superior').alias('county'),
+			col('Localidad_NombreLocalidad').alias('city'),
+			col('CodigoPostal').alias('postal_code')
+			).withColumn("cultural_kind",lit(filename[:filename.find('.')])).distinct()
+		#We finally apply union to all the sparkDf handles
+	
+		try:
+			sparkdf_cultural
+		except NameError:
+			#is Sparkdf_garitos doesn't exist, we create it.
+			sparkdf_cultural=exp_df6
+		else:
+			sparkdf_cultural = (
+				sparkdf_cultural.union(exp_df6))
+
+	return sparkdf_cultural
