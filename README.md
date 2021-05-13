@@ -102,6 +102,10 @@ And just in the case of social, sports (a list of the sports that are the object
 ### Garitos
 
 So, for garitos:
+
+<img width="593" alt="image" src="https://user-images.githubusercontent.com/6404071/118194145-36cdc780-b449-11eb-88c5-774a6307707b.png">
+
+```
 root
  |-- name: string (nullable = true) *Comes from field 'Nombre' in the bares/restaurants/cafeterias file*
  |-- address: string (nullable = true) *Comes from field 'Dirección' in the 3 garitos files*
@@ -109,10 +113,15 @@ root
  |-- city: string (nullable = true) *Comes from field 'Municipio' in the 3 garitos files. We could have used Municipio, Localidad or Nucleo, but Municipio was more consistently filed and contained fewer mistakes, nulls, unexpected values to fix*
  |-- postal_code: string (nullable = true) *Comes from C.Postal in the 3 garitos files. Also, we would try to guess the postal_code when it is not present in the datafile*
  |-- garito_kind: string (nullable = false) *As we made a UNION of data coming from the 3 datafiles, this column identifies the kind of garito (depending on the file where the element was stored: bar/restaurant/cafeteria)*
+```
 
 ### Social
 
 For social:
+
+<img width="591" alt="image" src="https://user-images.githubusercontent.com/6404071/118194127-2d445f80-b449-11eb-84ad-12886d5eeca8.png">
+
+```
 root 
  |-- name: string (nullable = true) *Comes from field 'Nombre' in the sportclubs file or 'Asociación' in the associations file*
  |-- address: string (nullable = true) *Comes from field 'Domicilio' in the asociaciones/sportclubs files*
@@ -121,10 +130,16 @@ root
  |-- postal_code: string (nullable = true) *Comes from field 'C.Postal' in the sportclubs file or 'C_Postal' in the associations file*
  |-- sports: string (nullable = true) *Contains a | sepparated list with the sports that are the object of the sportclub or null if the row came from a cultural association*
  |-- social_kind: string (nullable = false) *As we made a UNION of data coming from the 3 datafiles, this column identifies the kind of social (depending on the file where the element was stored: association/sportclub)*
+```
 
 ### Cultural
 
 For cultural:
+
+
+<img width="181" alt="image" src="https://user-images.githubusercontent.com/6404071/118194104-2289ca80-b449-11eb-9601-7323a71de337.png">
+
+```
 root
  |-- name: string (nullable = true)
  |-- address: string (nullable = true)
@@ -132,8 +147,13 @@ root
  |-- city: string (nullable = true)
  |-- postal_code: string (nullable = true)
  |-- cultural_kind: string (nullable = false)
+```
 
 The issue for cultural was that the input json files were really convoluted. This is the schema:
+
+<img width="288" alt="image" src="https://user-images.githubusercontent.com/6404071/118194079-11d95480-b449-11eb-9075-a385e56225c9.png">
+
+```
 root
  |-- document: struct (nullable = true)
  |    |-- date: string (nullable = true)
@@ -147,46 +167,34 @@ root
  |    |    |    |    |    |    |-- string: string (nullable = true)
  |    |    |    |    |    |    |-- text: string (nullable = true)
  |    |    |    |    |    |    |-- valor: string (nullable = true)
+ ```
  
  Once we get to the inner element struct, we found pairs attribute-value, where the attribute name is 'name' but the assigned value could be 'LocalidadPadre', 'string', 'text' or 'valor'.
  
  So the information for one of these elements (say a library) has this aspect:
  
-+----------+--------------------+--------------------+--------------+--------------------+----+
-|library_id|                name|               valor|LocalidadPadre|              string|text|
-+----------+--------------------+--------------------+--------------+--------------------+----+
-|         0|       Identificador|       1191909671559|          null|                null|null|
-|         0|     NombreOrganismo|                null|          null|Biblioteca Públic...|null|
-|         0|      Descripcion_es|                null|          null|                null|null|
-|         0|     DatosPersonales|                null|          null|Victoria Fernánde...|null|
-|         0|           Direccion|                  []|          null|                null|null|
-|         0|               Calle|                null|          null|C/ María Sanz Ram...|null|
-|         0|        CodigoPostal|                null|          null|               40500|null|
-|         0|            Telefono|[{"string":"92155...|          null|                null|null|
-|         0|          FaxOficial|                  []|          null|                null|null|
-|         0|                 Fax|                  []|          null|                null|null|
-|         0|               Email|[{"string":"riaza...|          null|                null|null|
-|         0|           PaginaWeb|                  []|          null|                null|null|
-|         0|        Localidad_ID|                null| 1179298543947|                null|null|
-|         0|Localidad_NombreL...|                null|         Riaza|                null|null|
-|         0|      SoloClasificar|                null|          null|                null|null|
-|         0|            Posicion|                null|          null|41.27903202153456...|null|
-|         0|Identificador Dir...|       1284269350926|          null|                null|null|
-|         0| Directorio Superior|             Segovia|          null|                null|null|
-|         0| ultimaActualizacion|            20150910|          null|                null|null|
-|         0| Enlace al contenido|https://cultura.j...|          null|                null|null|
+ <img width="362" alt="image" src="https://user-images.githubusercontent.com/6404071/118194017-f706e000-b448-11eb-8107-a49ca1a990b2.png">
 
 ### Postal Codes
 
 - a **postal codes** parquet files containing triplets county-city-postal_code. This parquet file is extracted from the information in garitos file (it is not a complete postal_code list, as the aim is just to work/play with data).
+
+<img width="414" alt="image" src="https://user-images.githubusercontent.com/6404071/118194186-45b47a00-b449-11eb-9531-56d650f85f51.png">
+
+```
 root
  |-- county: string (nullable = true) *Extracted from field 'county' in garitos final table*
  |-- city: string (nullable = true) *Extracted from field 'city' in garitos final table*
  |-- postal_code: string (nullable = true) *Extracted from field 'postal_code' in garitos final table*
+```
 
 ### Population
 
 - a **population** parquet file containing the county, city and population (total and in buckets). 
+
+<img width="583" alt="image" src="https://user-images.githubusercontent.com/6404071/118194216-4fd67880-b449-11eb-9c55-f3313369dbc4.png">
+
+```
  |-- county: string (nullable = false) *The county is guessed from the postal_code included in field 'Municipios' in Cities population per gender age.csv*
  |-- city: string (nullable = true) *The city is extracted with a regexp from field 'Municipios' in Cities population per gender age.csv*
  |-- pop_under15: long (nullable = true) *Population in bucket 0..15 years calculated from the Cities population per gender age.csv*
@@ -196,7 +204,7 @@ root
  |-- pop_66to80: long (nullable = true) *Population in bucket. Same*
  |-- pop_over80: long (nullable = true) *Population in bucket. Same*
  |-- total_population: long (nullable = true) *Total population is the sum of all the buckets for a given city*
-
+```
 
 ## 3.2 Mapping Out Data Pipelines
 The pipelines are explained step by step in the jupyter notebook file *Capstone Project.ipynb*. 
