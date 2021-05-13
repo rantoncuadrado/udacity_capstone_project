@@ -5,7 +5,104 @@ Support module
 
 
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import udf, col, count, lit, when, max, lower, explode, explode_outer,coalesce, monotonically_increasing_id, collect_set
+from pyspark.sql.functions import udf, col, count, lit, when, max, lower, explode, explode_outer,coalesce, monotonically_increasing_id, collect_set , regexp_replace, regexp_extract, expr
+from pyspark.sql.types import IntegerType
+
+def create_population(spark_session, location_path, population_filename):
+
+	"""
+	Reads the list of different social elements returns a spark dataframe with the needed columns
+		
+	Parameters:
+	spark_session: the session we'll use (It could be local or to read from s3)
+	location_path: The path where the files are (It could be 's3a://bucket/' or a local path) 
+	population_filename filename for population 
+
+	Returns:
+	sparkdf_population: the sparkdataframe with all the garitos
+	"""
+
+	sparkdf_handle = spark_session.read.options(inferSchema='true',\
+				delimiter=';',
+				header='true',
+				encoding='ISO-8859-1').csv(location_path+population_filename)
+
+	# first we filter out municipalities that are not in Castilla y León region
+	# We can use the Municipios code (starts by the postal code of the cities)
+	# We change some column names 
+	# We use both genders population together
+	# We remove . from numbers in population, and also convert .. into 0 values
+	# We infer county from postal code and remove the postal code part (as postal code is
+	# just one of the possible postal codes for each city, when there are some)
+	# We finally fix all the weird chars (coming from the file that has these faults)
+	# and convert age and population to Integer
+
+	print("Population dataframe rows: ",sparkdf_handle.count())
+
+	sparkdf_handle=sparkdf_handle \
+	.select(col('Municipios').alias('city'),
+			col('Edad (aÃ±o a aÃ±o)').alias('age'),
+			col('Total').alias('population'))\
+	.where("Municipios like '05%' or Municipios like '09%' or Municipios like '24%' or \
+			Municipios like '34%' or Municipios like '37%' or Municipios like '40%' or \
+			Municipios like '42%' or Municipios like '47%' or Municipios like '49%' ") \
+	.where("Sexo ='Ambos sexos'")\
+	.where("age <> 'Total'")\
+	.withColumn('population', regexp_replace('population','\.\.','0')) \
+	.withColumn('population', regexp_replace('population','\.','')) \
+	.withColumn('age', regexp_extract('age', '([0-9]*)(\s+)', 1)) \
+	.withColumn("county",expr("case when city like '05%' then 'ávila' " +
+							"when city like '09%' then 'burgos' " +
+							"when city like '24%' then 'león' " +
+							"when city like '34%' then 'palencia' " +
+							"when city like '37%' then 'salamanca' " +
+							"when city like '40%' then 'segovia' " +
+							"when city like '42%' then 'soria' " +
+							"when city like '47%' then 'valladolid' " +
+							"when city like '49%' then 'zamora' " +
+							"else 'Great' end")) \
+	.withColumn('city', regexp_extract('city', '([0-9]*)(\s+)(.+)', 3)) \
+	.withColumn('city', regexp_replace('city', 'Ã¡', 'á')) \
+	.withColumn('city', regexp_replace('city', 'Ã\x81', 'Á')) \
+	.withColumn('city', regexp_replace('city', 'Ã©', 'é')) \
+	.withColumn('city', regexp_replace('city', 'Ã\xad', 'í')) \
+	.withColumn('city', regexp_replace('city', 'Ã\x8d', 'Í')) \
+	.withColumn('city', regexp_replace('city', 'Ã³', 'ó')) \
+	.withColumn('city', regexp_replace('city', 'Ã\x93', 'Ó')) \
+	.withColumn('city', regexp_replace('city', 'Ã\x9a', 'Ú')) \
+	.withColumn('city', regexp_replace('city', 'Ãº', 'ú')) \
+	.withColumn('city', regexp_replace('city', 'Ã¼', 'ü')) \
+	.withColumn('city', regexp_replace('city', 'Ã±', 'ñ')) \
+	.withColumn('age', col('age').cast(IntegerType())) \
+	.withColumn('population', col('population').cast(IntegerType()))
+
+	print("Population dataframe rows: ", sparkdf_handle.count())
+
+	sparkdf_population = sparkdf_handle.select('county','city','age','population')\
+	.withColumn('under16',expr('case when age <16 then population else 0 end'))\
+	.withColumn('16to30',expr('case when age >= 16 and age <31 then population else 0 end'))\
+	.withColumn('31to45',expr('case when age >= 31 and age <46 then population else 0 end'))\
+	.withColumn('46to65',expr('case when age >= 46 and age <66 then population else 0 end'))\
+	.withColumn('66to80',expr('case when age >= 66 and age <81 then population else 0 end'))\
+	.withColumn('over80',expr('case when age >= 81 then population else 0 end'))\
+	.groupBy('county','city') \
+	.agg({'under16': 'sum' , '16to30': 'sum' , '31to45': 'sum', '46to65': 'sum' , '66to80': 'sum' , 'over80': 'sum'} )\
+	.withColumn("total Population",col('sum(under16)')+col('sum(16to30)')+col('sum(31to45)')+col('sum(46to65)')+col('sum(66to80)')+col('sum(over80)'))
+
+	#We need to rename columns if we want them to be usable for the parquet files
+
+	sparkdf_population=sparkdf_population.select(
+		col('county'),
+		col('city'),
+		col('sum(under16)').alias('pop_under15'),
+		col('sum(16to30)').alias('pop_16to30'),
+		col('sum(31to45)').alias('pop_31to45'),
+		col('sum(46to65)').alias('pop_46to65'),
+		col('sum(66to80)').alias('pop_66to80'),
+		col('sum(over80)').alias('pop_over80'),
+		col('total Population').alias('total_population'))
+
+	return sparkdf_population
 
 
 def create_postal_code(sparkdf_garitos):
@@ -162,6 +259,19 @@ def toparquet_by_county_and_postcode(spark_session, parquet_location_path, spark
 
 	"""
 	sparkdf.write.partitionBy("county","postal_code").parquet(parquet_location_path, mode="overwrite")
+
+def toparquet_by_county(spark_session, parquet_location_path, sparkdf):
+
+	"""
+	Creates a parquet file with postal_codes
+	
+	Parameters:
+	spark_session: the session we'll use (It could be local or to read from s3)
+	parquet_location_path: The complete path where to copy the parquet file (It could be 's3a/bucket/' or a local path) 
+	sparkdf: the input sparkdataframe for the parquet table
+
+	"""
+	sparkdf.write.partitionBy("county").parquet(parquet_location_path, mode="overwrite")
 
 
 def create_cultural_from_json(spark_session, location_path, filenames):
